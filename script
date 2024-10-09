@@ -1,0 +1,88 @@
+import re
+
+def analyze_email_header(header):
+    feedback = []
+
+    # Check for the 'From' and 'Reply-To' addresses
+    from_match = re.search(r'From:\s*(.*)', header, re.IGNORECASE)
+    reply_to_match = re.search(r'Reply-To:\s*(.*)', header, re.IGNORECASE)
+
+    from_address = from_match.group(1).strip() if from_match else None
+    reply_to_address = reply_to_match.group(1).strip() if reply_to_match else None
+
+    if from_address and reply_to_address and from_address != reply_to_address:
+        feedback.append({
+            "Issue": "Mismatch between 'From' and 'Reply-To' addresses",
+            "Details": f"From: {from_address}\nReply-To: {reply_to_address}",
+            "Explanation": "A mismatch between these addresses can indicate an attempt to trick you into replying to a different email address than the one that sent the message."
+        })
+
+    # Check if the 'From' address uses a suspicious or common phishing domain
+    if from_address:
+        domain_check = re.search(r'@(gmail\.com|yahoo\.com|hotmail\.com|outlook\.com|example\.co|your-company\.co)', from_address, re.IGNORECASE)
+        if domain_check:
+            feedback.append({
+                "Issue": "Suspicious or public domain detected",
+                "Details": f"The email is from a potentially risky domain: {domain_check.group(0)}",
+                "Explanation": "Public or free email services and misspelled domains are frequently used in phishing attacks to mask the sender's true identity."
+            })
+
+    # Analyzing the 'Received' headers to detect abnormal patterns
+    received_headers = re.findall(r'Received:\s*(.*)', header, re.IGNORECASE)
+    if len(received_headers) > 3:  # Adjust threshold based on typical email flows in your organization
+        feedback.append({
+            "Issue": "Excessive 'Received' headers detected",
+            "Details": f"Number of 'Received' headers: {len(received_headers)}",
+            "Explanation": "Multiple 'Received' headers can indicate that the email passed through several servers, possibly as part of a spoofing technique."
+        })
+
+    # Checking for SPF, DKIM, and DMARC validation failures
+    spf_check = re.search(r'spf=fail', header, re.IGNORECASE)
+    dkim_check = re.search(r'dkim=fail', header, re.IGNORECASE)
+    dmarc_check = re.search(r'dmarc=fail', header, re.IGNORECASE)
+
+    if spf_check:
+        feedback.append({
+            "Issue": "SPF validation failed",
+            "Details": "SPF (Sender Policy Framework) check failed.",
+            "Explanation": "The server sending this email is not listed as an authorized sender for the domain, which is a strong indicator of spoofing."
+        })
+
+    if dkim_check:
+        feedback.append({
+            "Issue": "DKIM validation failed",
+            "Details": "DKIM (DomainKeys Identified Mail) check failed.",
+            "Explanation": "A DKIM failure suggests the email content might have been altered, compromising its integrity."
+        })
+
+    if dmarc_check:
+        feedback.append({
+            "Issue": "DMARC validation failed",
+            "Details": "DMARC (Domain-based Message Authentication, Reporting, and Conformance) check failed.",
+            "Explanation": "DMARC failure indicates the email did not pass the required checks, which helps prevent spoofed emails from being delivered."
+        })
+
+    # Output the results in a clean and structured format
+    if not feedback:
+        print("\n✅ The email header appears to be clean with no immediate phishing indicators detected.")
+    else:
+        print("\n⚠️ Phishing indicators detected in the email header:\n")
+        for item in feedback:
+            print(f"Issue: {item['Issue']}")
+            print(f"Details:\n  {item['Details']}")
+            print(f"Explanation: {item['Explanation']}\n")
+
+def main():
+    print("Paste the entire email header below and press Enter when done (type 'DONE' on a new line to finish):")
+    header_input = []
+    while True:
+        line = input()
+        if line.strip().upper() == 'DONE':
+            break
+        header_input.append(line)
+
+    full_header = "\n".join(header_input)
+    analyze_email_header(full_header)
+
+if __name__ == "__main__":
+    main()
