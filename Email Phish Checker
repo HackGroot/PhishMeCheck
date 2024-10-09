@@ -1,0 +1,91 @@
+import re
+import socket
+import requests
+
+# Replace 'YOUR_API_KEY' with your actual VirusTotal API key
+VIRUSTOTAL_API_KEY = 'YOUR_API_KEY'
+VIRUSTOTAL_API_URL = 'https://www.virustotal.com/vtapi/v2/domain/report'
+
+def check_domain_reputation(domain):
+    """
+    Checks the reputation of a domain using the VirusTotal API.
+    """
+    params = {'apikey': VIRUSTOTAL_API_KEY, 'domain': domain}
+    response = requests.get(VIRUSTOTAL_API_URL, params=params)
+
+    if response.status_code == 200:
+        data = response.json()
+        if 'positives' in data and data['positives'] > 0:
+            return "Bad"  # Domain flagged as suspicious or malicious
+        else:
+            return "Good"  # Domain appears safe
+    else:
+        return "Unknown"  # Could not determine the domain's reputation
+
+def extract_domains_from_email(header):
+    """
+    Extracts domains from the 'From' and 'Reply-To' fields in the email header.
+    """
+    from_match = re.search(r'From:\s*.*@(.*?)>', header, re.IGNORECASE)
+    reply_to_match = re.search(r'Reply-To:\s*.*@(.*?)>', header, re.IGNORECASE)
+    domains = set()
+
+    if from_match:
+        domains.add(from_match.group(1).strip())
+    if reply_to_match:
+        domains.add(reply_to_match.group(1).strip())
+
+    return domains
+
+def analyze_email_header(header):
+    """
+    Analyzes the email header for suspicious patterns, focusing on domain and IP address analysis.
+    """
+    feedback = []
+    score = 0  # Initialize a scoring system
+
+    # Check the reputation of domains in the 'From' and 'Reply-To' fields
+    domains = extract_domains_from_email(header)
+    for domain in domains:
+        reputation = check_domain_reputation(domain)
+        if reputation == "Bad":
+            score += 3  # Assign a higher weight to malicious domains
+            feedback.append({
+                "Issue": "Malicious domain detected",
+                "Details": f"The domain {domain} has a bad reputation according to VirusTotal.",
+                "Explanation": "Emails from domains flagged as malicious indicate a high probability of phishing or other malicious intent."
+            })
+        elif reputation == "Unknown":
+            feedback.append({
+                "Issue": "Unknown domain reputation",
+                "Details": f"The domain {domain}'s reputation could not be determined.",
+                "Explanation": "It's recommended to be cautious with domains that have an unknown reputation."
+            })
+
+    # Output the results in a clean and structured format
+    if score >= 3:
+        print("\n⚠️ High-risk phishing indicators detected in the email header:")
+    elif score > 0:
+        print("\n⚠️ Medium-risk issues found in the email header, please review:")
+    else:
+        print("\n✅ The email header appears to be clean with no immediate phishing indicators detected.")
+
+    # Output feedback in a structured format
+    for item in feedback:
+        print(f"Issue: {item['Issue']}")
+        print(f"Details:\n  {item['Details']}")
+        print(f"Explanation: {item['Explanation']}\n")
+
+def main():
+    print("Paste the entire email header below and press Enter when done (type 'DONE' on a new line to finish):")
+    header_input = []
+    while True:
+        line = input()
+        if line.strip().upper() == 'DONE':
+            break
+        header_input.append(line)
+    full_header = "\n".join(header_input)
+    analyze_email_header(full_header)
+
+if __name__ == "__main__":
+    main()
